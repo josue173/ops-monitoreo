@@ -1,0 +1,99 @@
+# Stack de monitoreo y AIOps (VM srv-ops, 10.10.30.20).
+#
+#   docker compose up -d --build                    stack completo
+#   docker compose --profile demo up -d --build     + tráfico simulado (sin maqueta)
+#
+#   Grafana:  http://localhost:3000   InfluxDB: http://localhost:8086
+#   Syslog de pfSense -> UDP 514 de esta máquina
+services:
+  influxdb:
+    image: influxdb:2.7
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_USUARIO:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_CLAVE:-prepago-umg-2026}
+      DOCKER_INFLUXDB_INIT_ORG: prepago
+      DOCKER_INFLUXDB_INIT_BUCKET: monitoreo
+      DOCKER_INFLUXDB_INIT_RETENTION: 30d
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-token-prepago-cambiar}
+    ports:
+      - "8086:8086"
+    volumes:
+      - influx-datos:/var/lib/influxdb2
+      - influx-config:/etc/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana-oss:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_USUARIO:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_CLAVE:-prepago-umg-2026}
+      # Lectura sin login: útil para dejar el dashboard en pantalla durante la Feria
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/prepago.json
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-token-prepago-cambiar}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-datos:/var/lib/grafana
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  aiops:
+    build: ./aiops
+    environment:
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-token-prepago-cambiar}
+      INFLUX_ORG: prepago
+      INFLUX_BUCKET: monitoreo
+    ports:
+      - "514:5514/udp"
+    volumes:
+      - aiops-datos:/app/datos          # modelo entrenado y logs grabados
+      - ./reportes:/app/reportes        # reportes de evaluación, visibles en el host
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Telegraf local: latencia a Internet, disponibilidad del portal y ancho de banda de esta
+  # máquina. En la maqueta, pfSense corre además su propio Telegraf (telegraf/pfsense.conf).
+  telegraf:
+    image: telegraf:1.32
+    environment:
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-token-prepago-cambiar}
+      PORTAL_A_URL: ${PORTAL_A_URL:-http://host.docker.internal:8081/api/salud}
+      PORTAL_B_URL: ${PORTAL_B_URL:-http://host.docker.internal:8082/api/salud}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # necesario en Linux; Docker Desktop ya lo define
+    volumes:
+      - ./telegraf/local.conf:/etc/telegraf/telegraf.conf:ro
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Solo con --profile demo: genera tráfico de 30 clientes y un ataque cada 3 minutos
+  simulador:
+    build: ./aiops
+    profiles: ["demo"]
+    command: ["python", "-m", "aiops", "simular", "--destino", "aiops:5514", "--cada", "3"]
+    depends_on:
+      - aiops
+    restart: unless-stopped
+
+volumes:
+  influx-datos:
+  influx-config:
+  grafana-datos:
+  aiops-datos:

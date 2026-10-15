@@ -1,0 +1,41 @@
+{
+  "escenarios": 3,
+  "minutos_por_escenario": 240,
+  "ventanas_evaluadas": 25405,
+  "ventanas_ataque": 179,
+  "precision": 0.778,
+  "recall": 1.0,
+  "f1": 0.875,
+  "roc_auc": 1.0,
+  "tasa_falsos_positivos": 0.002,
+  "matriz_confusion": {
+    "vn": 25175,
+    "fp": 51,
+    "fn": 0,
+    "vp": 179
+  },
+  "recall_por_tipo": {
+    "escaneo": 1.0,
+    "barrido": 1.0,
+    "fuerza_bruta": 1.0,
+    "inundacion_udp": 1.0,
+    "inundacion_syn": 1.0,
+    "escaneo_lento": 1.0
+  },
+  "tipo_correcto": {
+    "escaneo": 1.0,
+    "barrido": 1.0,
+    "fuerza_bruta": 1.0,
+    "inundacion_udp": 1.0,
+    "inundacion_syn": 1.0,
+    "escaneo_lento": 1.0
+  },
+  "ataques_por_tipo": {
+    "fuerza_bruta": 20,
+    "barrido": 33,
+    "inundacion_syn": 38,
+    "escaneo": 29,
+    "inundacion_udp": 27,
+    "escaneo_lento": 32
+  }
+}
